@@ -1,0 +1,27 @@
+# build output
+bin/
+obj/
+Release/
+Debug/
+x64/
+*.obj
+*.pdb
+*.ilk
+*.exp
+*.lib
+*.idb
+*.iobj
+*.ipdb
+*.tlog
+*.log
+
+# visual studio
+.vs/
+*.user
+*.suo
+
+# harness output
+*.wav
+
+# local copies of the original game DLLs, kept on disk for reverting
+backup-original/
