@@ -56,11 +56,14 @@ private:
 	static const int kWinSize   = 1 << kWinBits;
 
 	// pitch analysis runs on a x4 decimated copy
-	static const int kDecim     = 4;
+	// chosen in Init so the decimated rate lands near 12 kHz whatever the device runs at.
+	// if this stayed fixed at 4, a 96 kHz interface would decimate to 24 kHz and kMaxLag
+	// would only reach 70 Hz, losing the composite period of a low power chord.
+	int    m_decim = 4;
 	static const int kAnaSize   = 1024;
 	static const int kAnaMask   = kAnaSize - 1;
-	static const int kMinLag    = 9;      // ~1333 Hz at 12 kHz
-	static const int kMaxLag    = 340;    // ~35 Hz at 12 kHz, low enough to catch the
+	static const int kMinLag    = 9;      // ~1333 Hz at the decimated rate
+	static const int kMaxLag    = 340;    // ~35 Hz at the decimated rate, low enough to catch the
 	                                      // composite period of a low power chord
 
 	double m_sampleRate   = 48000.0;

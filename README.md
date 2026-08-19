@@ -81,3 +81,21 @@ A cents fine-tune field was prototyped and removed. The value reached the audio 
 correctly but the on-screen field did not reliably display it, and a control that
 disagrees with what is actually applied is worse than no control. The audio path still
 carries a cents parameter for a later build.
+
+## Compatibility
+
+**ASIO interfaces:** hardware agnostic. The shifter sits in RS_ASIO's own input path and
+works on the game's buffer format, converting through RS_ASIO's existing routines, which
+cover 16, 24 and 32 bit integer plus 32 and 64 bit float in any combination. Sample rate
+is taken from the stream and every time constant is derived from it, so 44.1, 48, 88.2,
+96 and 192 kHz all behave the same. Buffer size is whatever the driver gives; the shifter
+does not care.
+
+**Real Tone cable:** only if it reaches the game through ASIO, for example wrapped by
+ASIO4ALL and selected in `RS_ASIO.ini`. Used as a plain USB audio device on the normal
+WASAPI path it is not touched, because RSTune only runs inside RS_ASIO's ASIO client.
+
+**WASAPI:** not shifted. With `EnableWasapiInputs=1` RS_ASIO hands the game the real
+system devices and the audio never passes through the code RSTune lives in. Input must be
+ASIO (`EnableWasapiInputs=0`, `EnableAsio=1`) for RSTune to do anything. `EnableWasapiOutputs`
+does not matter, since only the input path is shifted.

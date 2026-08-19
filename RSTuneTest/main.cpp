@@ -10,7 +10,7 @@
 #include "RSTuneShared.h"
 #include "Tunings.h"
 
-static const int   kSR = 48000;
+static int kSR = 48000;   // varied by the sample-rate coverage test
 static const double kPi = 3.14159265358979323846;
 
 // ---------------------------------------------------------------------------
@@ -486,6 +486,57 @@ int main(int argc, char** argv)
 			printf("  %-13ls -> %-13ls %-12s %s\n", c.from, c.to,
 			       uniform ? "uniform" : "rejected", ok ? "ok" : "<-- FAIL");
 		}
+		printf("\n");
+	}
+
+	// ---- 7. sample rate coverage ------------------------------------------
+	// Interfaces run at 44.1, 48, 88.2, 96 and sometimes 192 kHz. The pitch tracker
+	// works on a decimated copy, so the decimation factor has to adapt or its usable
+	// range slides with the device rate and low chords stop aligning.
+	{
+		printf("--- sample rate coverage: low E note and E5 power chord, -2 st ---\n");
+		const int rates[] = { 44100, 48000, 88200, 96000, 192000 };
+		const float ratio = (float)std::pow(2.0, -2.0 / 12.0);
+
+		for (int sr : rates)
+		{
+			kSR = sr;
+
+			// single low E
+			std::vector<float> note((size_t)(kSR * 2.2), 0.0f);
+			AddPluck(note, 82.41, 0.05, 2.0, 1.0, 3);
+			PitchShifter a; a.Init(kSR); a.SetQuality(RSTuneQuality_Balanced); a.SetRatio(ratio); a.Reset();
+			RunShifter(a, note, 128);
+			const double noteHz = MeasureF0(note, (int)(0.35 * kSR), (int)(1.0 * kSR));
+			const double noteCents = Cents(noteHz, 82.41 * ratio);
+
+			// E5 power chord, the case that needs the composite period
+			std::vector<float> chord((size_t)(kSR * 2.2), 0.0f);
+			AddPluck(chord, 82.41, 0.05, 2.0, 0.8, 4);
+			AddPluck(chord, 123.47, 0.058, 2.0, 0.8, 5);
+			PitchShifter b; b.Init(kSR); b.SetQuality(RSTuneQuality_Balanced); b.SetRatio(ratio); b.Reset();
+			RunShifter(b, chord, 128);
+
+			const int from = (int)(0.35 * kSR), count = (int)(0.8 * kSR);
+			double worst = 1e9;
+			for (double f : { 82.41, 123.47 })
+			{
+				const double ms = MagAt(chord, from, count, f * ratio);
+				const double mo = MagAt(chord, from, count, f);
+				worst = (std::min)(worst, 20.0 * std::log10((ms + 1e-12) / (mo + 1e-12)));
+			}
+
+			checks += 2;
+			const bool noteOk = std::fabs(noteCents) < 15.0 && !HasBadSamples(note);
+			const bool chordOk = worst > 12.0 && !HasBadSamples(chord);
+			if (!noteOk) ++failures;
+			if (!chordOk) ++failures;
+
+			printf("  %6d Hz   note %+6.1fc %-4s   chord %+6.1f dB %-4s   tracker saw %.1f Hz\n",
+			       sr, noteCents, noteOk ? "ok" : "FAIL",
+			       worst, chordOk ? "ok" : "FAIL", b.GetDetectedHz());
+		}
+		kSR = 48000;
 		printf("\n");
 	}
 

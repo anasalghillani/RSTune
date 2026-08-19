@@ -15,6 +15,9 @@ void PitchShifter::Init(double sampleRate)
 {
 	m_sampleRate = (sampleRate > 8000.0) ? sampleRate : 48000.0;
 
+	m_decim = (int)(m_sampleRate / 12000.0 + 0.5);
+	if (m_decim < 1) m_decim = 1;
+
 	m_buf.assign(kBufSize, 0.0f);
 	m_ana.assign(kAnaSize, 0.0f);
 	m_anaLin.assign(kAnaSize, 0.0f);
@@ -176,7 +179,7 @@ void PitchShifter::Process(float* io, int numSamples)
 		// decimate by 4 into the pitch analysis ring
 		m_lpA += (x - m_lpA) * lpCoef;
 		m_lpB += (m_lpA - m_lpB) * lpCoef;
-		if (++m_decimCount >= kDecim)
+		if (++m_decimCount >= m_decim)
 		{
 			m_decimCount = 0;
 			m_ana[m_anaWrite & kAnaMask] = m_lpB;
@@ -336,7 +339,7 @@ void PitchShifter::AnalysePitch()
 	}
 
 	m_confidence = m_nsdf[bestLag];
-	const double periodFull = lagF * (double)kDecim;
+	const double periodFull = lagF * (double)m_decim;
 	m_periodSamples = (int)(periodFull + 0.5);
 	m_detectedHz = (float)(m_sampleRate / periodFull);
 }
