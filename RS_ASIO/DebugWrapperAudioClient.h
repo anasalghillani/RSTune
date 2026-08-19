@@ -32,6 +32,12 @@ protected:
 	TBase& m_RealAudioClient;
 	std::wstring m_DeviceId;
 
+	// RSTune: format captured at Initialize so the capture wrapper can set up its shifter
+	WAVEFORMATEXTENSIBLE m_RSTuneFormat{};
+	bool     m_RSTuneFormatValid = false;
+	unsigned m_RSTuneBufferFrames = 0;
+	bool     m_RSTuneIsAsioClient = false;
+
 	IAudioCaptureClient* m_CaptureClient = nullptr;
 	IAudioRenderClient* m_RenderClient = nullptr;
 };

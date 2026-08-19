@@ -1,6 +1,7 @@
 #include "stdafx.h"
 #include "DebugWrapperAudioClient.h"
 #include "DebugWrapperCaptureClient.h"
+#include "RSTune/WasapiShifter.h"
 #include "DebugWrapperRenderClient.h"
 #include "MyUnknown.h"
 
@@ -67,6 +68,30 @@ HRESULT STDMETHODCALLTYPE DebugWrapperAudioClient<TBase>::Initialize(AUDCLNT_SHA
 
 	HRESULT hr = m_RealAudioClient.Initialize(ShareMode, StreamFlags, hnsBufferDuration, hnsPeriodicity, pFormat, AudioSessionGuid);
 	DEBUG_PRINT_HR(hr);
+
+	// RSTune: remember the negotiated format for the capture wrapper. The ASIO devices
+	// are themselves wrapped by this class and already shift inside RSAsioAudioClient,
+	// so ask the real client whether it is one of ours and leave it alone if it is,
+	// otherwise the signal would be shifted twice.
+	if (SUCCEEDED(hr) && pFormat)
+	{
+		const size_t copyBytes = (pFormat->wFormatTag == WAVE_FORMAT_EXTENSIBLE)
+			? sizeof(WAVEFORMATEXTENSIBLE) : sizeof(WAVEFORMATEX);
+		memset(&m_RSTuneFormat, 0, sizeof(m_RSTuneFormat));
+		memcpy(&m_RSTuneFormat, pFormat, copyBytes);
+		m_RSTuneFormatValid = true;
+
+		UINT32 frames = 0;
+		if (SUCCEEDED(m_RealAudioClient.GetBufferSize(&frames)))
+			m_RSTuneBufferFrames = frames;
+
+		IUnknown* marker = nullptr;
+		if (SUCCEEDED(m_RealAudioClient.QueryInterface(IID_RSTuneAsioClientMarker, (void**)&marker)) && marker)
+		{
+			m_RSTuneIsAsioClient = true;
+			marker->Release();
+		}
+	}
 
 	return hr;
 }
@@ -229,7 +254,10 @@ HRESULT STDMETHODCALLTYPE DebugWrapperAudioClient<TBase>::GetService(REFIID riid
 	{
 		if (riid == __uuidof(IAudioCaptureClient))
 		{
-			m_CaptureClient = new DebugWrapperCaptureClient( *(*(IAudioCaptureClient**)ppv), m_DeviceId);
+			m_CaptureClient = new DebugWrapperCaptureClient(
+				*(*(IAudioCaptureClient**)ppv), m_DeviceId,
+				(m_RSTuneFormatValid && !m_RSTuneIsAsioClient) ? &m_RSTuneFormat.Format : nullptr,
+				m_RSTuneBufferFrames);
 			(*(IAudioCaptureClient**)ppv)->Release();
 			m_CaptureClient->AddRef();
 			*ppv = m_CaptureClient;

@@ -204,6 +204,9 @@
     <ClInclude Include="RSTune\RSTuneShm.h" />
     <ClInclude Include="RSTune\RSTuneShared.h" />
     <ClInclude Include="RSTune\Tunings.h" />
+    <ClInclude Include="RSTune\WasapiShifter.h" />
+    <ClInclude Include="RSTune\PacketShifter.h" />
+    <ClInclude Include="RSTune\GameConfig.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="AsioHelpers.cpp" />
@@ -245,6 +248,9 @@
     <ClCompile Include="Utils.cpp" />
     <ClCompile Include="RSTune\PitchShifter.cpp" />
     <ClCompile Include="RSTune\RSTuneShm.cpp" />
+    <ClCompile Include="RSTune\WasapiShifter.cpp" />
+    <ClCompile Include="RSTune\PacketShifter.cpp" />
+    <ClCompile Include="RSTune\GameConfig.cpp" />
   </ItemGroup>
   <ItemGroup>
     <None Include="exports.def" />

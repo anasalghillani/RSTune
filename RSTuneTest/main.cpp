@@ -9,6 +9,7 @@
 #include "PitchShifter.h"
 #include "RSTuneShared.h"
 #include "Tunings.h"
+#include "PacketShifter.h"
 
 static int kSR = 48000;   // varied by the sample-rate coverage test
 static const double kPi = 3.14159265358979323846;
@@ -537,6 +538,131 @@ int main(int argc, char** argv)
 			       worst, chordOk ? "ok" : "FAIL", b.GetDetectedHz());
 		}
 		kSR = 48000;
+		printf("\n");
+	}
+
+	// ---- 8. WASAPI packet path --------------------------------------------
+	// The WASAPI hook receives interleaved packets of varying size in whatever format
+	// the device negotiated, which is a different shape of problem from the ASIO path.
+	// This drives the real PacketShifter, the same code the hook calls.
+	{
+		printf("--- WASAPI packet path: interleaved formats and ragged packet sizes ---\n");
+
+		struct FmtCase { const wchar_t* name; WORD bits; bool isFloat; WORD channels; };
+		const FmtCase fmts[] = {
+			{ L"16 bit PCM mono",    16, false, 1 },
+			{ L"16 bit PCM stereo",  16, false, 2 },
+			{ L"24 bit PCM mono",    24, false, 1 },
+			{ L"32 bit PCM stereo",  32, false, 2 },
+			{ L"32 bit float mono",  32, true,  1 },
+			{ L"32 bit float stereo",32, true,  2 },
+		};
+
+		// deliberately uneven, the way WASAPI hands out packets
+		const unsigned packets[] = { 160, 441, 128, 1024, 96, 480 };
+		const float ratio = (float)std::pow(2.0, -2.0 / 12.0);
+		const double srcHz = 110.0;   // A2
+
+		for (const FmtCase& f : fmts)
+		{
+			WAVEFORMATEXTENSIBLE wf{};
+			wf.Format.wFormatTag = f.isFloat ? WAVE_FORMAT_IEEE_FLOAT : WAVE_FORMAT_PCM;
+			wf.Format.nChannels = f.channels;
+			wf.Format.nSamplesPerSec = kSR;
+			wf.Format.wBitsPerSample = f.bits;
+			wf.Format.nBlockAlign = (WORD)(f.channels * (f.bits / 8));
+			wf.Format.nAvgBytesPerSec = wf.Format.nBlockAlign * kSR;
+			wf.Format.cbSize = 0;
+
+			PacketShifter pk;
+			if (!pk.Init(&wf.Format, 2048))
+			{
+				++checks; ++failures;
+				printf("  %-22ls  Init FAILED\n", f.name);
+				continue;
+			}
+			pk.SetQuality(RSTuneQuality_Balanced);
+			pk.SetRatio(ratio);
+			pk.Reset();
+
+			// build an interleaved source: channel 0 the note, channel 1 an octave up so
+            // cross-channel bleed would be obvious
+			const int total = (int)(kSR * 2.2);
+			std::vector<float> chA(total, 0.0f), chB(total, 0.0f);
+			AddPluck(chA, srcHz, 0.05, 2.0, 0.8, 21);
+			AddPluck(chB, srcHz * 2.0, 0.05, 2.0, 0.8, 22);
+
+			std::vector<BYTE> in((size_t)total * wf.Format.nBlockAlign, 0);
+			for (int i = 0; i < total; ++i)
+			{
+				for (WORD c = 0; c < f.channels; ++c)
+				{
+					const float v = (c == 0) ? chA[i] : chB[i];
+					BYTE* dst = in.data() + (size_t)i * wf.Format.nBlockAlign + c * (f.bits / 8);
+					if (f.isFloat) { *(float*)dst = v; }
+					else if (f.bits == 16) { *(int16_t*)dst = (int16_t)(v * 32767.0f); }
+					else if (f.bits == 24) { const int32_t s = (int32_t)(v * 8388607.0f); memcpy(dst, &s, 3); }
+					else { *(int32_t*)dst = (int32_t)(v * 2147483000.0); }
+				}
+			}
+
+			// feed it through in ragged packets and reassemble channel 0
+			std::vector<float> outA(total, 0.0f);
+			int pos = 0, pi = 0;
+			bool refused = false;
+			while (pos < total)
+			{
+				unsigned n = packets[pi++ % (sizeof(packets) / sizeof(packets[0]))];
+				if ((int)n > total - pos) n = (unsigned)(total - pos);
+
+				BYTE* got = pk.Process(in.data() + (size_t)pos * wf.Format.nBlockAlign, n, false);
+				if (!got) { refused = true; break; }
+
+				for (unsigned i = 0; i < n; ++i)
+				{
+					const BYTE* s = got + (size_t)i * wf.Format.nBlockAlign;
+					float v = 0.0f;
+					if (f.isFloat) v = *(const float*)s;
+					else if (f.bits == 16) v = *(const int16_t*)s / 32768.0f;
+					else if (f.bits == 24) { int32_t t = 0; memcpy((BYTE*)&t + 1, s, 3); v = t / 2147483648.0f; }
+					else v = *(const int32_t*)s / 2147483648.0f;
+					outA[pos + i] = v;
+				}
+				pos += n;
+			}
+
+			const double measured = MeasureF0(outA, (int)(0.35 * kSR), (int)(1.0 * kSR));
+			const double cents = Cents(measured, srcHz * ratio);
+
+			++checks;
+			const bool ok = !refused && std::fabs(cents) < 15.0 && !HasBadSamples(outA);
+			if (!ok) ++failures;
+
+			printf("  %-22ls  %8.2f Hz -> %8.2f Hz  %+6.1fc  %s\n",
+			       f.name, srcHz, measured, cents, ok ? "ok" : "<-- FAIL");
+		}
+
+		// oversized packets must be refused, not silently truncated
+		{
+			WAVEFORMATEXTENSIBLE wf{};
+			wf.Format.wFormatTag = WAVE_FORMAT_IEEE_FLOAT;
+			wf.Format.nChannels = 1;
+			wf.Format.nSamplesPerSec = kSR;
+			wf.Format.wBitsPerSample = 32;
+			wf.Format.nBlockAlign = 4;
+			wf.Format.nAvgBytesPerSec = 4 * kSR;
+
+			PacketShifter pk;
+			pk.Init(&wf.Format, 512);
+			std::vector<BYTE> big((size_t)4096 * 4, 0);
+
+			++checks;
+			const bool refused = (pk.Process(big.data(), 4096, false) == nullptr);
+			const bool silentOk = (pk.Process(nullptr, 256, true) != nullptr);
+			if (!refused || !silentOk) ++failures;
+			printf("  oversized packet refused: %s   silent packet handled: %s\n",
+			       refused ? "yes" : "NO", silentOk ? "yes" : "NO");
+		}
 		printf("\n");
 	}
 

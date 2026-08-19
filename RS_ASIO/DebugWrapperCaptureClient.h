@@ -1,11 +1,13 @@
 #pragma once
 
 #include "ComBaseUnknown.h"
+#include "RSTune/WasapiShifter.h"
 
 class DebugWrapperCaptureClient : public ComBaseUnknown<IAudioCaptureClient>
 {
 public:
-	DebugWrapperCaptureClient(IAudioCaptureClient& realClient, const std::wstring& deviceId);
+	DebugWrapperCaptureClient(IAudioCaptureClient& realClient, const std::wstring& deviceId,
+	                          const WAVEFORMATEX* fmt, unsigned maxFrames);
 	DebugWrapperCaptureClient(const DebugWrapperCaptureClient&) = delete;
 	DebugWrapperCaptureClient(DebugWrapperCaptureClient&&) = delete;
 	virtual ~DebugWrapperCaptureClient();
@@ -19,4 +21,7 @@ private:
 	std::wstring m_DeviceId;
 
 	unsigned m_GetCount = 0;
+
+	// RSTune: shifts the guitar signal before the game receives it
+	WasapiShifter m_Shifter;
 };

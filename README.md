@@ -84,18 +84,44 @@ carries a cents parameter for a later build.
 
 ## Compatibility
 
-**ASIO interfaces:** hardware agnostic. The shifter sits in RS_ASIO's own input path and
-works on the game's buffer format, converting through RS_ASIO's existing routines, which
-cover 16, 24 and 32 bit integer plus 32 and 64 bit float in any combination. Sample rate
-is taken from the stream and every time constant is derived from it, so 44.1, 48, 88.2,
-96 and 192 kHz all behave the same. Buffer size is whatever the driver gives; the shifter
-does not care.
+**ASIO interfaces:** hardware agnostic. The shifter works on the game's buffer format,
+converting through RS_ASIO's existing routines, which cover 16, 24 and 32 bit integer
+plus 32 and 64 bit float in any combination. Every time constant is derived from the
+stream, so 44.1, 48, 88.2, 96 and 192 kHz all behave the same, and buffer size is
+whatever the driver gives.
 
-**Real Tone cable:** only if it reaches the game through ASIO, for example wrapped by
-ASIO4ALL and selected in `RS_ASIO.ini`. Used as a plain USB audio device on the normal
-WASAPI path it is not touched, because RSTune only runs inside RS_ASIO's ASIO client.
+**WASAPI inputs:** supported. When RS_ASIO hands the game the real system devices
+(`EnableWasapiInputs=1`), the shifter runs inside `DebugWrapperCaptureClient::GetBuffer`,
+which already sits between the driver and the game. WASAPI hands out packets of varying
+size and its buffer belongs to the driver, so a processed copy is made in memory RSTune
+owns and that pointer is returned instead. Packets larger than the client's buffer size
+are passed through untouched rather than allocating on a realtime thread.
 
-**WASAPI:** not shifted. With `EnableWasapiInputs=1` RS_ASIO hands the game the real
-system devices and the audio never passes through the code RSTune lives in. Input must be
-ASIO (`EnableWasapiInputs=0`, `EnableAsio=1`) for RSTune to do anything. `EnableWasapiOutputs`
-does not matter, since only the input path is shifted.
+**Real Tone cable:** works, because it is an ordinary WASAPI capture device. It also
+works through ASIO4ALL if you prefer that route.
+
+**Not shifted twice:** the ASIO devices are themselves wrapped by the same
+`DebugWrapperAudioClient` that the WASAPI hook lives in. RSAsioAudioClient answers to a
+private marker interface so the WASAPI side recognises it and stands down.
+
+**Microphones:** every capture stream the game opens is listed in the window with a
+checkbox, so you can untick anything that is not your guitar. There is no reliable way
+to tell a guitar interface from a headset automatically, so RSTune does not pretend
+there is; it only pre-unticks a stream that looks like a microphone the first time it
+sees one, and only when the game has microphone support switched on.
+
+**What will defeat it:** `ForceWDM=1` or `ForceDirectXSink=1` in Rocksmith.ini route the
+game's audio around the interfaces RSTune hooks. The window says so explicitly rather
+than leaving you to guess.
+
+## Reading the game's configuration
+
+RSTune reads `Rocksmith.ini` from inside the game process, once per game launch, which
+is the cadence that matters: those settings only take effect when the game starts, so
+re-reading more often would tell you nothing new. The GUI receives the result through
+telemetry, so it refreshes on its own whenever you start the game.
+
+It is used for two things: deciding whether to bother hinting that a stream might be a
+microphone, and telling you plainly when the audio path cannot reach RSTune at all.
+The authority on whether shifting is happening is always the live telemetry, never the
+ini; the ini only explains why when the answer is no.

@@ -1,8 +1,12 @@
-// RSTune - shared memory endpoint used by the audio thread inside RS_ASIO.dll.
+// RSTune - shared memory endpoint and stream registry.
 //
-// The mapping is created lazily by whichever of RS_ASIO.dll and RSTune.exe starts
-// first. Reads on the audio thread go through a seqlock and never block, so a stalled
-// or crashed GUI cannot glitch the audio.
+// Both input paths register here: RSAsioAudioClient for ASIO devices and
+// DebugWrapperCaptureClient for real WASAPI devices. The registry owns the single
+// telemetry block so the GUI sees one consistent picture regardless of which path
+// the game ended up using.
+//
+// Reads on the audio threads go through a seqlock and never block, so a stalled or
+// crashed GUI cannot glitch the audio.
 #pragma once
 
 #include "RSTuneShared.h"
@@ -14,15 +18,24 @@ public:
 
 	bool IsValid() const { return m_shared != nullptr; }
 
-	// Returns the last consistently read control block. If the GUI happened to be
-	// mid-write, the previous values are reused rather than blocking.
+	// Last consistently read control block. If the GUI was mid-write the previous
+	// values are reused rather than blocking.
 	const RSTuneControl& Control();
 
-	void PublishTelemetry(const RSTuneTelemetry& t);
+	// Returns a slot index, or -1 when there is no room. Not realtime safe; call it
+	// from Initialize / GetService, never from a buffer callback.
+	int RegisterStream(int path, const wchar_t* label, const wchar_t* id,
+	                   float sampleRate, int channels, bool looksLikeMic);
+	void UnregisterStream(int slot);
 
-	// Only one audio client should publish telemetry; the first input client to ask
-	// wins and keeps the claim for the lifetime of the process.
-	bool ClaimTelemetry(const void* owner);
+	// Has the user opted this stream out in the GUI?
+	bool IsStreamEnabled(int slot);
+
+	// Realtime safe. Updates this stream's own slot and, for the publishing stream,
+	// pushes the whole block to shared memory.
+	void UpdateStream(int slot, bool shifted, float detectedHz, float addedLatencyMs);
+	void PublishGlobal(int slot, float sampleRate, int blockFrames, float inPeakDb,
+	                   float outPeakDb, float detectedHz, float addedLatencyMs, float cpuPercent);
 
 private:
 	RSTuneShm();
@@ -32,5 +45,9 @@ private:
 	void* m_mapping = nullptr;
 	RSTuneShared* m_shared = nullptr;
 	RSTuneControl m_cached{};
-	const void* m_telemetryOwner = nullptr;
+
+	// staging copy; each stream only ever touches its own slot
+	RSTuneTelemetry m_staging{};
+	int m_publisher = -1;
+	std::mutex m_registryMutex;
 };

@@ -6,6 +6,7 @@
 #include "RSAsioAudioCaptureClient.h"
 #include "AudioProcessing.h"
 #include "RSTune/RSTuneShm.h"
+#include "RSTune/WasapiShifter.h"
 #include <cmath>
 
 RSAsioAudioClient::RSAsioAudioClient(RSAsioDevice& asioDevice)
@@ -42,6 +43,12 @@ RSAsioAudioClient::~RSAsioAudioClient()
 		m_CaptureClient = nullptr;
 	}
 
+	if (m_TuneSlot >= 0)
+	{
+		RSTuneShm::Get().UnregisterStream(m_TuneSlot);
+		m_TuneSlot = -1;
+	}
+
 	m_AsioSharedHost.Release();
 	m_AsioDevice.Release();
 }
@@ -54,6 +61,13 @@ HRESULT RSAsioAudioClient::QueryInterface(REFIID riid, void **ppvObject)
 	if (riid == __uuidof(IAudioClient) || riid == __uuidof(IAudioClient2) || riid == __uuidof(IAudioClient3))
 	{
 		*ppvObject = this;
+		AddRef();
+		return S_OK;
+	}
+	else if (riid == IID_RSTuneAsioClientMarker)
+	{
+		// presence of this interface tells the WASAPI hook to leave the stream alone
+		*ppvObject = static_cast<IAudioClient3*>(this);
 		AddRef();
 		return S_OK;
 	}
@@ -720,13 +734,19 @@ void RSAsioAudioClient::SetupRSTune()
 {
 	const RSAsioDevice::Config& cfg = m_AsioDevice.GetConfig();
 
-	// only real instrument inputs get shifted. the microphone client is left alone so
-	// vocals and the game's own mic features keep working normally.
+	// only real instrument inputs get shifted. RS_ASIO tells us outright which client is
+	// the microphone, so on this path there is no guesswork and no reason to ever
+	// touch it.
 	m_TuneEligible = !cfg.isOutput && !cfg.isMicrophone;
+
+	if (m_TuneSlot >= 0)
+	{
+		RSTuneShm::Get().UnregisterStream(m_TuneSlot);
+		m_TuneSlot = -1;
+	}
 
 	m_TuneShifters.clear();
 	m_TuneScratch.clear();
-	m_TunePublishes = false;
 
 	if (!m_TuneEligible)
 		return;
@@ -744,11 +764,14 @@ void RSAsioAudioClient::SetupRSTune()
 		ps.Init(sr);
 
 	m_TuneScratch.assign(m_bufferNumFrames, 0.0f);
-	m_TunePublishes = RSTuneShm::Get().ClaimTelemetry(this);
+
+	m_TuneSlot = RSTuneShm::Get().RegisterStream(
+		RSTunePath_Asio, m_AsioDevice.GetIdRef().c_str(), m_AsioDevice.GetIdRef().c_str(),
+		(float)sr, (int)numCh, /*looksLikeMic =*/ false);
 
 	rslog::info_ts() << m_AsioDevice.GetIdRef() << " RSTune ready - " << numCh
-		<< " ch, " << (unsigned)sr << " Hz, " << m_bufferNumFrames << " frames"
-		<< (m_TunePublishes ? " (publishing telemetry)" : "") << std::endl;
+		<< " ch, " << (unsigned)sr << " Hz, " << m_bufferNumFrames << " frames, slot "
+		<< m_TuneSlot << std::endl;
 }
 
 void RSAsioAudioClient::ProcessRSTune(ASIOSampleType gameSampleType, WORD gameSampleTypeSize)
@@ -756,10 +779,11 @@ void RSAsioAudioClient::ProcessRSTune(ASIOSampleType gameSampleType, WORD gameSa
 	if (!m_TuneEligible || m_TuneShifters.empty() || m_TuneScratch.size() < m_bufferNumFrames)
 		return;
 
-	const RSTuneControl& ctl = RSTuneShm::Get().Control();
+	RSTuneShm& shm = RSTuneShm::Get();
+	const RSTuneControl& ctl = shm.Control();
 
 	float ratio = 1.0f;
-	if (ctl.enabled)
+	if (ctl.enabled && shm.IsStreamEnabled(m_TuneSlot))
 	{
 		float st = (float)ctl.semitones + ctl.cents * 0.01f;
 		if (st < -12.0f) st = -12.0f;
@@ -791,7 +815,7 @@ void RSAsioAudioClient::ProcessRSTune(ASIOSampleType gameSampleType, WORD gameSa
 			frames,
 			(BYTE*)m_TuneScratch.data(), ASIOSTFloat32LSB, (WORD)sizeof(float));
 
-		if (m_TunePublishes && ch == 0)
+		if (ch == 0)
 		{
 			for (DWORD i = 0; i < frames; ++i)
 			{
@@ -802,7 +826,7 @@ void RSAsioAudioClient::ProcessRSTune(ASIOSampleType gameSampleType, WORD gameSa
 
 		ps.Process(m_TuneScratch.data(), (int)frames);
 
-		if (m_TunePublishes && ch == 0)
+		if (ch == 0)
 		{
 			for (DWORD i = 0; i < frames; ++i)
 			{
@@ -817,26 +841,19 @@ void RSAsioAudioClient::ProcessRSTune(ASIOSampleType gameSampleType, WORD gameSa
 			chBase, gameSampleType, stride);
 	}
 
-	if (m_TunePublishes)
-	{
-		LARGE_INTEGER t1;
-		QueryPerformanceCounter(&t1);
+	LARGE_INTEGER t1;
+	QueryPerformanceCounter(&t1);
 
-		const double sr = (double)m_WaveFormat.Format.nSamplesPerSec;
-		const double elapsed = (double)(t1.QuadPart - t0.QuadPart) / (double)s_qpf.QuadPart;
-		const double budget = (double)frames / sr;
+	const double sr = (double)m_WaveFormat.Format.nSamplesPerSec;
+	const double elapsed = (double)(t1.QuadPart - t0.QuadPart) / (double)s_qpf.QuadPart;
+	const double budget = (double)frames / sr;
 
-		RSTuneTelemetry t;
-		t.heartbeat = ++m_TuneHeartbeat;
-		t.streamActive = m_IsStarted ? 1 : 0;
-		t.sampleRate = (float)sr;
-		t.blockFrames = (int)frames;
-		t.inputPeakDb = 20.0f * log10f(inPeak + 1.0e-9f);
-		t.outputPeakDb = 20.0f * log10f(outPeak + 1.0e-9f);
-		t.detectedHz = m_TuneShifters[0].GetDetectedHz();
-		t.addedLatencyMs = (float)(m_TuneShifters[0].GetLatencySamples() * 1000.0 / sr);
-		t.cpuPercent = (budget > 0.0) ? (float)(100.0 * elapsed / budget) : 0.0f;
+	const float detectedHz = m_TuneShifters[0].GetDetectedHz();
+	const float latencyMs = (float)(m_TuneShifters[0].GetLatencySamples() * 1000.0 / sr);
 
-		RSTuneShm::Get().PublishTelemetry(t);
-	}
+	shm.UpdateStream(m_TuneSlot, ratio != 1.0f, detectedHz, latencyMs);
+	shm.PublishGlobal(m_TuneSlot, (float)sr, (int)frames,
+		20.0f * log10f(inPeak + 1.0e-9f), 20.0f * log10f(outPeak + 1.0e-9f),
+		detectedHz, latencyMs,
+		(budget > 0.0) ? (float)(100.0 * elapsed / budget) : 0.0f);
 }

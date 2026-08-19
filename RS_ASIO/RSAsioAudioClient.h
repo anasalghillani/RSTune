@@ -93,8 +93,8 @@ private:
 	std::vector<PitchShifter> m_TuneShifters;
 	std::vector<float>        m_TuneScratch;
 	bool                      m_TuneEligible = false;
-	bool                      m_TunePublishes = false;
-	int                       m_TuneHeartbeat = 0;
+	int                       m_TuneSlot = -1;
+
 
 	// this is used for ... hacks
 	MyUnknown* m_MyUnknown = nullptr;
