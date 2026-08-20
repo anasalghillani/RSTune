@@ -132,6 +132,36 @@ the game negotiated:
 The one machine-specific thing left is `RS_ASIO.ini`, which is RS_ASIO's own config and
 is where you name your ASIO driver. That is not shipped with RSTune.
 
+### Output driver, exclusive mode, and what actually breaks it
+
+**The output driver is irrelevant.** RSTune only ever touches the capture path. There is
+no RSTune code in either render client, and on the ASIO side the hook sits inside the
+input branch only. Whatever the game plays back through, and whether that is ASIO or
+WASAPI, shared or exclusive, RSTune never sees it and cannot affect it.
+
+**Exclusive and shared mode both work on the input.** Exclusive gives fixed size packets
+and shared gives variable ones; the hook handles either, and ragged packet sizes are part
+of the test suite. `ExclusiveMode` in Rocksmith.ini changes what the game asks for, not
+whether RSTune can sit in the path.
+
+**Unsupported formats degrade to a pass-through**, they do not fail loudly or produce
+garbage: 8 bit, 20 bit and 16 bit float are all declined cleanly and the driver's buffer
+is handed to the game untouched.
+
+Things that genuinely stop it working:
+
+- `ForceWDM=1` or `ForceDirectXSink=1` in Rocksmith.ini. The game routes around the
+  interfaces RSTune hooks. The window says so.
+- The game never opening a capture stream at all. `RealToneCableOnly=1` with no cable and
+  no ASIO device is one way to land here.
+- Windows having "allow applications to take exclusive control" switched off for the
+  input device while the game asks for exclusive mode. Worth knowing that this stops
+  Rocksmith getting any input at all, with or without RSTune.
+
+In other words the remaining failure modes are ones where the game itself has no working
+guitar input; there is no known configuration where Rocksmith gets audio and RSTune
+cannot reach it, other than the two Rocksmith.ini switches above.
+
 ### Bass
 
 A uniform shift applies to bass exactly as it does to guitar, and the pitch tracker

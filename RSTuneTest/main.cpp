@@ -664,6 +664,32 @@ int main(int argc, char** argv)
 			if (!refused || !silentOk) ++failures;
 			printf("  oversized packet refused: %s   silent packet handled: %s\n",
 			       refused ? "yes" : "NO", silentOk ? "yes" : "NO");
+
+		// a format we cannot convert must decline cleanly, so the caller hands the
+		// driver's buffer through untouched instead of producing garbage or crashing
+		{
+			struct Bad { const wchar_t* name; WORD bits; bool isFloat; };
+			const Bad bad[] = {
+				{ L"8 bit PCM",    8,  false },
+				{ L"20 bit PCM",   20, false },
+				{ L"16 bit float", 16, true  },
+			};
+			for (const Bad& b : bad)
+			{
+				WAVEFORMATEXTENSIBLE wf{};
+				wf.Format.wFormatTag = b.isFloat ? WAVE_FORMAT_IEEE_FLOAT : WAVE_FORMAT_PCM;
+				wf.Format.nChannels = 1;
+				wf.Format.nSamplesPerSec = kSR;
+				wf.Format.wBitsPerSample = b.bits;
+				wf.Format.nBlockAlign = (WORD)((b.bits / 8) ? (b.bits / 8) : 1);
+
+				PacketShifter pk;
+				const bool declined = !pk.Init(&wf.Format, 512);
+				++checks;
+				if (!declined) ++failures;
+				printf("  %-14ls declined cleanly: %s\n", b.name, declined ? "yes" : "NO");
+			}
+		}
 		}
 		printf("\n");
 	}
