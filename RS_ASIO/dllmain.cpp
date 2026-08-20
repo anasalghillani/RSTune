@@ -1,6 +1,7 @@
 // dllmain.cpp : Defines the entry point for the DLL application.
 #include "stdafx.h"
 #include "Patcher.h"
+#include "RSTune/Version.h"
 #include "DebugDeviceEnum.h"
 #include "RSAggregatorDeviceEnum.h"
 #include "Configurator.h"
@@ -19,7 +20,8 @@ BOOL APIENTRY DllMain( HMODULE hModule,
 		DisableThreadLibraryCalls(hModule);
 
 		rslog::InitLog();
-		rslog::info_ts() << " - Wrapper DLL loaded (v0.7.4)" << std::endl;
+		// mark the fork so a log from this build is never mistaken for stock RS_ASIO
+		rslog::info_ts() << " - Wrapper DLL loaded (RS_ASIO v0.7.4 + RSTune " RSTUNE_VERSION_STR_A ")" << std::endl;
 		InitPatcher();
 		PatchOriginalCode();
 		break;

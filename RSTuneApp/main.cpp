@@ -23,6 +23,7 @@
 
 #include "RSTuneShared.h"
 #include "Tunings.h"
+#include "Version.h"
 
 #pragma comment(lib, "comctl32.lib")
 #pragma comment(lib, "shlwapi.lib")
@@ -709,7 +710,7 @@ int WINAPI wWinMain(HINSTANCE inst, HINSTANCE, LPWSTR, int show)
 	RECT rc = { 0, 0, 464, 520 };
 	AdjustWindowRect(&rc, WS_OVERLAPPED | WS_CAPTION | WS_SYSMENU | WS_MINIMIZEBOX, FALSE);
 
-	HWND hwnd = CreateWindowExW(0, L"RSTuneMain", L"RSTune",
+	HWND hwnd = CreateWindowExW(0, L"RSTuneMain", L"RSTune " RSTUNE_VERSION_STR,
 		WS_OVERLAPPED | WS_CAPTION | WS_SYSMENU | WS_MINIMIZEBOX,
 		CW_USEDEFAULT, CW_USEDEFAULT, rc.right - rc.left, rc.bottom - rc.top,
 		nullptr, nullptr, inst, nullptr);

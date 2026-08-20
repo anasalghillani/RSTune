@@ -25,3 +25,6 @@ x64/
 
 # local copies of the original game DLLs, kept on disk for reverting
 backup-original/
+
+# release payload is attached to GitHub Releases, not committed
+release/

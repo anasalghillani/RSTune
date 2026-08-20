@@ -10,6 +10,11 @@ into the game. You hear the shifted tuning, and the game's own tuner and note de
 both agree with it, so you can play a D Standard song with your guitar in E Standard
 without touching a peg.
 
+## Installing
+
+See [INSTALL.md](INSTALL.md). The download is RS_ASIO with the shifter built in, so you
+do not install both.
+
 ## How to use it
 
 1. Start `RSTune.exe` from the Rocksmith folder.
