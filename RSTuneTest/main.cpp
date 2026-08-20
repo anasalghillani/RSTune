@@ -283,9 +283,11 @@ int main(int argc, char** argv)
 			{ "D5 power (D3 A3)",       { 146.83, 220.00, 0, 0 }, 2 },
 		};
 
+		const char* qnames2[] = { "Tight", "Balanced", "Smooth" };
+		for (int q = 0; q < RSTuneQuality_Count; ++q)
 		for (const ChordDef& cd : chords)
 		{
-			for (int st : { -1, -2, -4 })
+			for (int st : { -2 })
 			{
 				const float ratio = (float)std::pow(2.0, st / 12.0);
 
@@ -295,7 +297,7 @@ int main(int argc, char** argv)
 
 				PitchShifter ps;
 				ps.Init(kSR);
-				ps.SetQuality(RSTuneQuality_Balanced);
+				ps.SetQuality(q);
 				ps.SetRatio(ratio);
 				ps.Reset();
 				RunShifter(ps, buf, block);

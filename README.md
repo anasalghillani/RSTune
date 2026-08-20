@@ -162,14 +162,35 @@ In other words the remaining failure modes are ones where the game itself has no
 guitar input; there is no known configuration where Rocksmith gets audio and RSTune
 cannot reach it, other than the two Rocksmith.ini switches above.
 
+### Quality presets
+
+All three are correct everywhere. They differ only in how many periods of the note go
+into a grain on the middle and upper strings; the bottom of the range is dictated by
+physics and is identical on all of them, because a grain has to span at least one period
+of the note to stay aligned.
+
+Measured added latency at 48 kHz, shifting down two semitones:
+
+| String        | Tight   | Balanced | Smooth  |
+|---------------|---------|----------|---------|
+| E2 (low E)    | 12.1 ms | 12.1 ms  | 12.1 ms |
+| A2            |  9.1 ms |  9.1 ms  |  9.1 ms |
+| D3            |  6.9 ms |  6.9 ms  | 13.7 ms |
+| G3            |  5.1 ms | 10.0 ms  | 10.2 ms |
+| B3            |  4.1 ms |  8.1 ms  |  8.1 ms |
+| E4 (high e)   |  6.0 ms |  6.1 ms  |  9.2 ms |
+
+Pitch accuracy is within about 2.7 cents on every preset and every string, so there is no
+measured accuracy reason to prefer one. Larger grains splice less often, which changes the
+character of the artifacts rather than the amount of them, and that difference is not
+something the test suite can score. Start on Tight if you want the least latency, and move
+up only if something sounds rough to you.
+
 ### Bass
 
-A uniform shift applies to bass exactly as it does to guitar, and the pitch tracker
-reaches down to about 30 Hz so a 5 string low B is covered. One caveat measured rather
-than assumed: a 30.9 Hz low B needs a grain longer than the Balanced preset's latency
-ceiling allows, so it lands 18 cents flat there and 0.3 cents flat on Smooth, for 3 ms
-more latency. **On a 5 string bass, use Smooth.** Every other bass note is identical on
-both presets.
+A uniform shift applies to bass exactly as it does to guitar, and the pitch tracker reaches
+down to about 30 Hz, so a 5 string low B at 30.9 Hz is covered on every preset. A low B
+needs a grain of about 32 ms, which is simply what one period of that note costs.
 
 ## Reading the game's configuration
 

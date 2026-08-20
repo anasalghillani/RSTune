@@ -82,20 +82,30 @@ void PitchShifter::SetQuality(int quality)
 		return;
 	m_quality = quality;
 
-	// bounds are expressed at 48 kHz and scaled to the running rate.
-	// half a grain is also the mean latency the shifter adds.
+	// Bounds are expressed at 48 kHz and scaled to the running rate. Half a grain is
+	// also the mean latency the shifter adds.
+	//
+	// m_halfMax is a safety limit, NOT a latency policy, and is deliberately the same
+	// for every preset. Capping it lower to buy latency was measured to be a bad trade:
+	// once the grain is shorter than the period it has to align to, the two read heads
+	// comb and the note comes out wrong. A low power chord needs about 1160 samples at
+	// 48 kHz, and an 800 sample cap wrecked every E rooted chord.
+	//
+	// The presets differ in m_halfMin, which only decides how many periods per grain the
+	// higher strings get. The bottom end is dictated by physics and is identical on all
+	// three.
 	const double s = m_sampleRate / 48000.0;
 	switch (quality)
 	{
 	case RSTuneQuality_Tight:
-		m_halfMin = (int)(160 * s); m_halfMax = (int)(800 * s);  m_halfDefault = (int)(288 * s);
+		m_halfMin = (int)(160 * s); m_halfMax = (int)(2000 * s); m_halfDefault = (int)(288 * s);
 		break;
 	case RSTuneQuality_Smooth:
 		m_halfMin = (int)(384 * s); m_halfMax = (int)(2000 * s); m_halfDefault = (int)(800 * s);
 		break;
 	case RSTuneQuality_Balanced:
 	default:
-		m_halfMin = (int)(256 * s); m_halfMax = (int)(1400 * s); m_halfDefault = (int)(480 * s);
+		m_halfMin = (int)(256 * s); m_halfMax = (int)(2000 * s); m_halfDefault = (int)(480 * s);
 		break;
 	}
 
