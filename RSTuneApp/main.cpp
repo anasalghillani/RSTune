@@ -497,8 +497,8 @@ static void CreateControls(HWND hwnd)
 		WS_CHILD | WS_VISIBLE | WS_TABSTOP | CBS_DROPDOWNLIST,
 		cx, y, 200, 200, hwnd, (HMENU)IDC_QUALITY, g_inst, nullptr);
 	SendMessageW(g_quality, WM_SETFONT, (WPARAM)g_font, TRUE);
-	SendMessageW(g_quality, CB_ADDSTRING, 0, (LPARAM)L"Low latency");
-	SendMessageW(g_quality, CB_ADDSTRING, 0, (LPARAM)L"Smooth  (longer grains)");
+	SendMessageW(g_quality, CB_ADDSTRING, 0, (LPARAM)L"Lower latency");
+	SendMessageW(g_quality, CB_ADDSTRING, 0, (LPARAM)L"Smoother sound");
 
 	y += 38;
 	MakeLabel(hwnd, L"", lx, y, 432, 18, IDC_INPUTSHDR, g_fontBold);
