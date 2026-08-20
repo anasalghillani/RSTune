@@ -63,8 +63,9 @@ private:
 	static const int kAnaSize   = 1024;
 	static const int kAnaMask   = kAnaSize - 1;
 	static const int kMinLag    = 9;      // ~1333 Hz at the decimated rate
-	static const int kMaxLag    = 340;    // ~35 Hz at the decimated rate, low enough to catch the
-	                                      // composite period of a low power chord
+	static const int kMaxLag    = 400;    // ~30 Hz at the decimated rate. Low enough for the
+	                                      // composite period of a low power chord and for a
+	                                      // 5 string bass low B at 30.9 Hz
 
 	double m_sampleRate   = 48000.0;
 

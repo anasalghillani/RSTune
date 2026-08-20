@@ -357,9 +357,18 @@ static void UpdateStreamList(bool live, const RSTuneTelemetry& t)
 		SetWindowLongPtrW(g_stream[i], GWLP_USERDATA, (LONG_PTR)-1);
 	}
 
-	SetDlgItemTextW(g_main, IDC_INPUTSHDR,
-		shown ? L"Inputs RSTune is processing   (untick anything that is not your guitar)"
-		      : L"Inputs   -   none seen yet, start the game");
+	int active = 0;
+	for (int i = 0; i < RSTUNE_MAX_STREAMS && live && i < t.numStreams; ++i)
+		if (t.streams[i].active) ++active;
+
+	wchar_t hdr[200];
+	if (!shown)
+		swprintf_s(hdr, L"Inputs   -   none seen yet, start the game");
+	else if (active > MAX_SHOWN_STREAMS)
+		swprintf_s(hdr, L"Inputs RSTune is processing   (%d of %d shown; the rest stay enabled)", shown, active);
+	else
+		swprintf_s(hdr, L"Inputs RSTune is processing   (untick anything that is not your guitar)");
+	SetDlgItemTextW(g_main, IDC_INPUTSHDR, hdr);
 }
 
 static void UpdateStatus()

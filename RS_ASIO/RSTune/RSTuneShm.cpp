@@ -165,7 +165,7 @@ void RSTuneShm::UpdateStream(int slot, bool shifted, float detectedHz, float add
 void RSTuneShm::PublishGlobal(int slot, float sampleRate, int blockFrames, float inPeakDb,
                               float outPeakDb, float detectedHz, float addedLatencyMs, float cpuPercent)
 {
-	if (!m_shared || slot != m_publisher)
+	if (!m_shared || slot < 0 || slot != m_publisher)
 		return;
 
 	m_staging.heartbeat++;

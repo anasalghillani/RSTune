@@ -70,10 +70,12 @@ static void AddPluck(std::vector<float>& out, double f0, double startSec, double
 // ---------------------------------------------------------------------------
 // independent pitch measurement
 // ---------------------------------------------------------------------------
-static double MeasureF0(const std::vector<float>& x, int from, int count)
+// minHz defaults to 60 because widening the search costs real time on every call; the
+// bass cases pass a lower floor explicitly.
+static double MeasureF0(const std::vector<float>& x, int from, int count, double minHz = 60.0)
 {
 	const int minLag = (int)(kSR / 1400.0);
-	const int maxLag = (int)(kSR / 60.0);
+	const int maxLag = (int)(kSR / minHz);
 	const int N = count - maxLag;
 	if (N < 1024 || from + count > (int)x.size())
 		return 0.0;
@@ -662,6 +664,68 @@ int main(int argc, char** argv)
 			if (!refused || !silentOk) ++failures;
 			printf("  oversized packet refused: %s   silent packet handled: %s\n",
 			       refused ? "yes" : "NO", silentOk ? "yes" : "NO");
+		}
+		printf("\n");
+	}
+
+	// ---- 9. bass range ----------------------------------------------------
+	// Rocksmith has bass arrangements and a uniform shift applies to bass identically,
+	// so the tracker has to reach below a 4 string low E at 41.2 Hz and ideally a
+	// 5 string low B at 30.9 Hz.
+	{
+		printf("--- bass range ---\n");
+		struct BNote { const char* name; double hz; };
+		const BNote notes[] = {
+			{ "B0 (5 string low B)", 30.87 },
+			{ "E1 (4 string low E)", 41.20 },
+			{ "A1",                  55.00 },
+			{ "D2",                  73.42 },
+			{ "G2",                  98.00 },
+		};
+
+		const char* qn[] = { "Tight", "Balanced", "Smooth" };
+		for (const BNote& n : notes)
+		{
+			for (int q : { RSTuneQuality_Balanced, RSTuneQuality_Smooth })
+			for (int st : { -2 })
+			{
+				const float ratio = (float)std::pow(2.0, st / 12.0);
+				const double expected = n.hz * ratio;
+
+				std::vector<float> buf((size_t)(kSR * 2.6), 0.0f);
+				AddPluck(buf, n.hz, 0.05, 2.4, 1.0, (unsigned)(n.hz * 100) + st);
+
+				PitchShifter ps;
+				ps.Init(kSR);
+				ps.SetQuality(q);
+				ps.SetRatio(ratio);
+				ps.Reset();
+
+				const int from = (int)(0.5 * kSR), count = (int)(1.2 * kSR);
+				const int mid = from + count / 2;
+				float latencyMs = 0.0f, detected = 0.0f;
+				for (int i = 0; i < (int)buf.size(); i += 128)
+				{
+					const int m = (std::min)(128, (int)buf.size() - i);
+					ps.Process(&buf[i], m);
+					if (i <= mid && i + 128 > mid)
+					{
+						latencyMs = ps.GetLatencySamples() * 1000.0f / kSR;
+						detected = ps.GetDetectedHz();
+					}
+				}
+
+				const double measured = MeasureF0(buf, from, count, 22.0);
+				const double cents = Cents(measured, expected);
+
+				++checks;
+				const bool ok = std::fabs(cents) < 20.0 && !HasBadSamples(buf);
+				if (!ok) ++failures;
+
+				printf("  %-22s %+3d st  %7.2f -> %7.2f Hz  %+6.1fc  tracker %6.1f Hz  %5.1fms  %s\n",
+				       n.name, st, expected, measured, cents, detected, latencyMs,
+				       ok ? "ok" : "<-- FAIL");
+			}
 		}
 		printf("\n");
 	}

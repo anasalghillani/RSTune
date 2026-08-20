@@ -114,6 +114,33 @@ sees one, and only when the game has microphone support switched on.
 game's audio around the interfaces RSTune hooks. The window says so explicitly rather
 than leaving you to guess.
 
+### Is anything specific to one interface?
+
+No. There are no device or vendor names anywhere in the code, and nothing assumes a
+particular channel count, buffer size or sample rate. Everything comes from the stream
+the game negotiated:
+
+- **Sample rate** is read from the stream and every filter coefficient, grain bound and
+  the pitch tracker's decimation are derived from it. Verified at 44.1, 48, 88.2, 96 and
+  192 kHz.
+- **Sample format** goes through RS_ASIO's conversion routines: 16, 24 and 32 bit
+  integer and 32 and 64 bit float, in any combination. Verified for 16/24/32 bit PCM and
+  32 bit float, mono and stereo.
+- **Channel count** is whatever the device reports; each channel gets its own shifter.
+- **Buffer size** is whatever the driver gives, fixed or ragged.
+
+The one machine-specific thing left is `RS_ASIO.ini`, which is RS_ASIO's own config and
+is where you name your ASIO driver. That is not shipped with RSTune.
+
+### Bass
+
+A uniform shift applies to bass exactly as it does to guitar, and the pitch tracker
+reaches down to about 30 Hz so a 5 string low B is covered. One caveat measured rather
+than assumed: a 30.9 Hz low B needs a grain longer than the Balanced preset's latency
+ceiling allows, so it lands 18 cents flat there and 0.3 cents flat on Smooth, for 3 ms
+more latency. **On a 5 string bass, use Smooth.** Every other bass note is identical on
+both presets.
+
 ## Reading the game's configuration
 
 RSTune reads `Rocksmith.ini` from inside the game process, once per game launch, which
