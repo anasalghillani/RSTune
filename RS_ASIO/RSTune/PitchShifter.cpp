@@ -33,6 +33,10 @@ void PitchShifter::Init(double sampleRate)
 	m_fadeStep = 1.0f / 64.0f;
 	m_wetStep = (float)(1.0 / (0.020 * m_sampleRate));   // 20 ms engage/bypass ramp
 
+	// how long a grain change may sit unapplied before we stop waiting for a polite
+	// moment; see the comment at the switch gate in Process
+	m_pendingTimeout = (int)(0.15 * m_sampleRate);
+
 	SetQuality(RSTuneQuality_LowLatency);
 	Reset();
 }
@@ -47,6 +51,7 @@ void PitchShifter::Reset()
 	m_grain = m_halfDefault * 2;
 	m_pendingGrain = m_grain;
 	m_grainSwitchPending = false;
+	m_pendingAge = 0;
 
 	m_ratio = m_ratioTarget;
 	m_wet = m_wetTarget;
@@ -146,6 +151,7 @@ void PitchShifter::ApplyPendingGrain()
 	if (m_pendingGrain > kBufSize / 2) m_pendingGrain = kBufSize / 2;
 	m_grain = m_pendingGrain;
 	m_grainSwitchPending = false;
+	m_pendingAge = 0;
 }
 
 void PitchShifter::Process(float* io, int numSamples)
@@ -193,15 +199,35 @@ void PitchShifter::Process(float* io, int numSamples)
 			++m_sinceAnalyse;
 		}
 
-		// changing grain length moves both read heads, so only do it behind a fade and
-		// only where the 64-sample dip is masked by silence or a fresh transient
+		// Changing grain length moves both read heads, so it is done behind a fade, and
+		// preferably where the dip is masked by silence or a fresh transient.
+		//
+		// Waiting *only* for those two moments was a bug. A chord struck while the
+		// previous notes are still ringing produces neither: no gate, no onset. The
+		// grain the tracker asked for then sits pending forever and the chord plays on
+		// whatever length the last event happened to leave behind, which for a power
+		// chord is off by several times and combs the fifth into the floor. Every chord
+		// test started from silence, which is the one condition where this cannot
+		// happen, so the suite never saw it.
+		//
+		// So: still prefer a masked moment, but stop waiting for one after a while. A
+		// brief dip mid-sustain is far cheaper than playing a whole chord misaligned.
 		if (m_fadeDir == 0 && m_grainSwitchPending)
 		{
+			++m_pendingAge;
+
 			const bool quiet = m_envFast < kGateLinear;
 			const bool onset = (m_envFast > kGateLinear) && (m_envFast > m_envSlow * kOnsetRatio);
-			if (quiet || onset)
+			const bool waitedLongEnough = m_pendingAge > m_pendingTimeout;
+
+			if (quiet || onset || waitedLongEnough)
 				m_fadeDir = -1;
 		}
+		else if (!m_grainSwitchPending)
+		{
+			m_pendingAge = 0;
+		}
+
 		if (m_fadeDir < 0)
 		{
 			m_fadeGain -= m_fadeStep;

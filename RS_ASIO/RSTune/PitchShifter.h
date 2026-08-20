@@ -96,6 +96,8 @@ private:
 	float  m_fadeGain     = 1.0f;
 	float  m_fadeStep     = 1.0f / 64.0f;
 	bool   m_grainSwitchPending = false;
+	int    m_pendingAge = 0;        // samples a grain change has been waiting to apply
+	int    m_pendingTimeout = 7200; // set in Init from the sample rate
 
 	// dc blocker
 	float  m_dcX1 = 0.0f, m_dcY1 = 0.0f;

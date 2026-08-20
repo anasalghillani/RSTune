@@ -758,6 +758,72 @@ int main(int argc, char** argv)
 		printf("\n");
 	}
 
+	// ---- 10. grain switch while notes are still ringing --------------------
+	// Every chord case above starts from silence, which is the one condition where a
+	// pending grain change is guaranteed to be applied. Real playing is not like that:
+	// a chord struck while the previous notes still ring produces neither a quiet gate
+	// nor an onset, so the grain the tracker asked for may never be installed.
+	{
+		printf("--- chord preceded by ringing notes vs from silence ---\n");
+		const float ratio = (float)std::pow(2.0, -2.0 / 12.0);
+		const double root = 82.41, fifth = 123.47;
+
+		struct Ctx { const char* name; bool leadIn; };
+		const Ctx ctxs[] = { { "from silence", false }, { "after a ringing run", true } };
+
+		for (const Ctx& c : ctxs)
+		{
+			std::vector<float> buf((size_t)(kSR * 4.0), 0.0f);
+
+			// lead-in notes that are still sounding when the chord arrives
+			if (c.leadIn)
+			{
+				AddPluck(buf, 146.83, 0.05, 1.6, 0.9, 61);
+				AddPluck(buf, 196.00, 0.35, 1.4, 0.9, 62);
+				AddPluck(buf, 246.94, 0.65, 1.2, 0.9, 63);
+			}
+			AddPluck(buf, root,  0.95, 2.6, 0.8, 64);
+			AddPluck(buf, fifth, 0.958, 2.6, 0.8, 65);
+
+			PitchShifter ps;
+			ps.Init(kSR);
+			ps.SetQuality(RSTuneQuality_LowLatency);
+			ps.SetRatio(ratio);
+			ps.Reset();
+
+			const int from = (int)(1.4 * kSR), count = (int)(0.8 * kSR);
+			const int mid = from + count / 2;
+			int grainAtMid = 0;
+			for (int i = 0; i < (int)buf.size(); i += 128)
+			{
+				const int n = (std::min)(128, (int)buf.size() - i);
+				ps.Process(&buf[i], n);
+				if (i <= mid && i + 128 > mid) grainAtMid = ps.GetGrain();
+			}
+
+			// spread across the chord's shifted partials: a comb notch shows up as one
+			// partial being far quieter than the others
+			double lo = 1e9, hi = -1e9;
+			for (double f : { root, fifth })
+				for (int k = 1; k <= 3; ++k)
+				{
+					const double db = 20.0 * std::log10(MagAt(buf, from, count, f * ratio * k) + 1e-12);
+					if (db > hi) hi = db;
+					if (db < lo) lo = db;
+				}
+
+			++checks;
+			// 40 dB was loose enough that the stale-grain bug passed it at 30.6 dB. The
+			// aligned case measures about 15 dB, so 20 fails the bug and passes the fix.
+			const bool ok = !HasBadSamples(buf) && (hi - lo) < 20.0;
+			if (!ok) ++failures;
+
+			printf("  %-20s grain %5d (half %4d)   partial spread %5.1f dB   %s\n",
+			       c.name, grainAtMid, grainAtMid / 2, hi - lo, ok ? "" : "<-- FAIL");
+		}
+		printf("  (an E5 power chord needs half ~1166 at 48 kHz to stay aligned)\n\n");
+	}
+
 	printf("=========================================================================\n");
 	printf("%d checks, %d failures\n", checks, failures);
 	return failures == 0 ? 0 : 1;
