@@ -200,7 +200,7 @@ static void PushControl()
 
 	c.quality = (int)SendMessageW(g_quality, CB_GETCURSEL, 0, 0);
 	if (c.quality < 0 || c.quality >= RSTuneQuality_Count)
-		c.quality = RSTuneQuality_Balanced;
+		c.quality = RSTuneQuality_LowLatency;
 
 	// map the user's per-device choices onto whatever slots the DLL is using now
 	for (int i = 0; i < RSTUNE_MAX_STREAMS; ++i)
@@ -224,7 +224,7 @@ static void SaveSettings()
 	IniSet(L"CurrentTuning", g_curIndex);
 	IniSet(L"TargetTuning", g_tgtIndex);
 	IniSet(L"Enabled", Button_GetCheck(g_enable) == BST_CHECKED ? 1 : 0);
-	IniSet(L"Quality", (int)SendMessageW(g_quality, CB_GETCURSEL, 0, 0));
+	IniSet(L"Quality2", (int)SendMessageW(g_quality, CB_GETCURSEL, 0, 0));
 	SaveDisabledIds();
 }
 
@@ -497,9 +497,8 @@ static void CreateControls(HWND hwnd)
 		WS_CHILD | WS_VISIBLE | WS_TABSTOP | CBS_DROPDOWNLIST,
 		cx, y, 200, 200, hwnd, (HMENU)IDC_QUALITY, g_inst, nullptr);
 	SendMessageW(g_quality, WM_SETFONT, (WPARAM)g_font, TRUE);
-	SendMessageW(g_quality, CB_ADDSTRING, 0, (LPARAM)L"Tight  (least latency)");
-	SendMessageW(g_quality, CB_ADDSTRING, 0, (LPARAM)L"Balanced");
-	SendMessageW(g_quality, CB_ADDSTRING, 0, (LPARAM)L"Smooth  (best on chords)");
+	SendMessageW(g_quality, CB_ADDSTRING, 0, (LPARAM)L"Low latency");
+	SendMessageW(g_quality, CB_ADDSTRING, 0, (LPARAM)L"Smooth  (longer grains)");
 
 	y += 38;
 	MakeLabel(hwnd, L"", lx, y, 432, 18, IDC_INPUTSHDR, g_fontBold);
@@ -567,8 +566,15 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
 		SendMessageW(g_curCombo, CB_SETCURSEL, g_curIndex, 0);
 		RefreshTargets();
 
-		int q = IniGet(L"Quality", RSTuneQuality_Balanced);
-		if (q < 0 || q >= RSTuneQuality_Count) q = RSTuneQuality_Balanced;
+		// The setting used to have three values. Migrate rather than reinterpret, or an
+		// existing install would silently land on a different preset than it was tuned on.
+		int q = IniGet(L"Quality2", -1);
+		if (q < 0)
+		{
+			const int legacy = IniGet(L"Quality", 1);   // 0 Tight, 1 Balanced, 2 Smooth
+			q = (legacy >= 2) ? RSTuneQuality_Smooth : RSTuneQuality_LowLatency;
+		}
+		if (q < 0 || q >= RSTuneQuality_Count) q = RSTuneQuality_LowLatency;
 		SendMessageW(g_quality, CB_SETCURSEL, q, 0);
 
 		Button_SetCheck(g_enable, IniGet(L"Enabled", 0) ? BST_CHECKED : BST_UNCHECKED);

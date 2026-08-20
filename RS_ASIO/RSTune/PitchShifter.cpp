@@ -33,7 +33,7 @@ void PitchShifter::Init(double sampleRate)
 	m_fadeStep = 1.0f / 64.0f;
 	m_wetStep = (float)(1.0 / (0.020 * m_sampleRate));   // 20 ms engage/bypass ramp
 
-	SetQuality(RSTuneQuality_Balanced);
+	SetQuality(RSTuneQuality_LowLatency);
 	Reset();
 }
 
@@ -92,20 +92,16 @@ void PitchShifter::SetQuality(int quality)
 	// 48 kHz, and an 800 sample cap wrecked every E rooted chord.
 	//
 	// The presets differ in m_halfMin, which only decides how many periods per grain the
-	// higher strings get. The bottom end is dictated by physics and is identical on all
-	// three.
+	// higher strings get. The bottom end is dictated by physics and is identical on both.
 	const double s = m_sampleRate / 48000.0;
 	switch (quality)
 	{
-	case RSTuneQuality_Tight:
-		m_halfMin = (int)(160 * s); m_halfMax = (int)(2000 * s); m_halfDefault = (int)(288 * s);
-		break;
 	case RSTuneQuality_Smooth:
 		m_halfMin = (int)(384 * s); m_halfMax = (int)(2000 * s); m_halfDefault = (int)(800 * s);
 		break;
-	case RSTuneQuality_Balanced:
+	case RSTuneQuality_LowLatency:
 	default:
-		m_halfMin = (int)(256 * s); m_halfMax = (int)(2000 * s); m_halfDefault = (int)(480 * s);
+		m_halfMin = (int)(160 * s); m_halfMax = (int)(2000 * s); m_halfDefault = (int)(288 * s);
 		break;
 	}
 

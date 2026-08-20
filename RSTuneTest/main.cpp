@@ -186,7 +186,7 @@ int main(int argc, char** argv)
 		{ "G3", 196.00 }, { "B3", 246.94 }, { "E4 (high e)", 329.63 },
 	};
 	const int semis[] = { -1, -2, -3, -4, -5 };
-	const char* qnames[] = { "Tight", "Balanced", "Smooth" };
+	const char* qnames[] = { "LowLatency", "Smooth" };
 
 	printf("RSTune DSP harness  (sample rate %d, block %d)\n", kSR, block);
 	printf("=========================================================================\n\n");
@@ -199,7 +199,7 @@ int main(int argc, char** argv)
 
 		PitchShifter ps;
 		ps.Init(kSR);
-		ps.SetQuality(RSTuneQuality_Balanced);
+		ps.SetQuality(RSTuneQuality_LowLatency);
 		ps.SetRatio(1.0f);
 		ps.Reset();
 		RunShifter(ps, out, block);
@@ -216,7 +216,7 @@ int main(int argc, char** argv)
 	}
 
 	// ---- 2. pitch accuracy across the fretboard ---------------------------
-	for (int qi = 0; qi < 3; ++qi)
+	for (int qi = 0; qi < RSTuneQuality_Count; ++qi)
 	{
 		printf("--- quality: %s ---\n", qnames[qi]);
 		printf("%-14s %7s  %10s %10s %9s %8s %7s\n",
@@ -283,7 +283,7 @@ int main(int argc, char** argv)
 			{ "D5 power (D3 A3)",       { 146.83, 220.00, 0, 0 }, 2 },
 		};
 
-		const char* qnames2[] = { "Tight", "Balanced", "Smooth" };
+		const char* qnames2[] = { "LowLatency", "Smooth" };
 		for (int q = 0; q < RSTuneQuality_Count; ++q)
 		for (const ChordDef& cd : chords)
 		{
@@ -352,7 +352,7 @@ int main(int argc, char** argv)
 
 		PitchShifter ps;
 		ps.Init(kSR);
-		ps.SetQuality(RSTuneQuality_Balanced);
+		ps.SetQuality(RSTuneQuality_LowLatency);
 		ps.SetRatio(ratio);
 		ps.Reset();
 		// walk the run so we can watch what the grain tracker decides
@@ -403,7 +403,7 @@ int main(int argc, char** argv)
 
 		PitchShifter ps;
 		ps.Init(kSR);
-		ps.SetQuality(RSTuneQuality_Balanced);
+		ps.SetQuality(RSTuneQuality_LowLatency);
 		ps.SetRatio(1.0f);
 		ps.Reset();
 
@@ -441,7 +441,7 @@ int main(int argc, char** argv)
 			std::vector<float> wet = dry;
 			PitchShifter ps;
 			ps.Init(kSR);
-			ps.SetQuality(RSTuneQuality_Balanced);
+			ps.SetQuality(RSTuneQuality_LowLatency);
 			ps.SetRatio((float)std::pow(2.0, st / 12.0));
 			ps.Reset();
 			RunShifter(ps, wet, block);
@@ -510,7 +510,7 @@ int main(int argc, char** argv)
 			// single low E
 			std::vector<float> note((size_t)(kSR * 2.2), 0.0f);
 			AddPluck(note, 82.41, 0.05, 2.0, 1.0, 3);
-			PitchShifter a; a.Init(kSR); a.SetQuality(RSTuneQuality_Balanced); a.SetRatio(ratio); a.Reset();
+			PitchShifter a; a.Init(kSR); a.SetQuality(RSTuneQuality_LowLatency); a.SetRatio(ratio); a.Reset();
 			RunShifter(a, note, 128);
 			const double noteHz = MeasureF0(note, (int)(0.35 * kSR), (int)(1.0 * kSR));
 			const double noteCents = Cents(noteHz, 82.41 * ratio);
@@ -519,7 +519,7 @@ int main(int argc, char** argv)
 			std::vector<float> chord((size_t)(kSR * 2.2), 0.0f);
 			AddPluck(chord, 82.41, 0.05, 2.0, 0.8, 4);
 			AddPluck(chord, 123.47, 0.058, 2.0, 0.8, 5);
-			PitchShifter b; b.Init(kSR); b.SetQuality(RSTuneQuality_Balanced); b.SetRatio(ratio); b.Reset();
+			PitchShifter b; b.Init(kSR); b.SetQuality(RSTuneQuality_LowLatency); b.SetRatio(ratio); b.Reset();
 			RunShifter(b, chord, 128);
 
 			const int from = (int)(0.35 * kSR), count = (int)(0.8 * kSR);
@@ -585,7 +585,7 @@ int main(int argc, char** argv)
 				printf("  %-22ls  Init FAILED\n", f.name);
 				continue;
 			}
-			pk.SetQuality(RSTuneQuality_Balanced);
+			pk.SetQuality(RSTuneQuality_LowLatency);
 			pk.SetRatio(ratio);
 			pk.Reset();
 
@@ -711,10 +711,10 @@ int main(int argc, char** argv)
 			{ "G2",                  98.00 },
 		};
 
-		const char* qn[] = { "Tight", "Balanced", "Smooth" };
+		const char* qn[] = { "LowLatency", "Smooth" };
 		for (const BNote& n : notes)
 		{
-			for (int q : { RSTuneQuality_Balanced, RSTuneQuality_Smooth })
+			for (int q = 0; q < RSTuneQuality_Count; ++q)
 			for (int st : { -2 })
 			{
 				const float ratio = (float)std::pow(2.0, st / 12.0);

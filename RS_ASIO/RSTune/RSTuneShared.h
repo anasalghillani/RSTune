@@ -14,12 +14,16 @@
 #define RSTUNE_LABEL_LEN   64
 #define RSTUNE_ID_LEN      96
 
-// Larger grains sound smoother on chords but add latency and onset jitter.
+// How many periods of the note go into a grain on the middle and upper strings. The
+// bottom of the range is the same either way, because a grain has to span at least one
+// period to stay aligned, and that is what a low E costs.
+//
+// Deliberately not named for sound quality: measured pitch accuracy is the same on both,
+// so longer grains change the character of the artifacts rather than removing them.
 enum RSTuneQuality
 {
-	RSTuneQuality_Tight = 0,
-	RSTuneQuality_Balanced = 1,
-	RSTuneQuality_Smooth = 2,
+	RSTuneQuality_LowLatency = 0,
+	RSTuneQuality_Smooth = 1,
 	RSTuneQuality_Count
 };
 

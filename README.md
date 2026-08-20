@@ -162,29 +162,37 @@ In other words the remaining failure modes are ones where the game itself has no
 guitar input; there is no known configuration where Rocksmith gets audio and RSTune
 cannot reach it, other than the two Rocksmith.ini switches above.
 
-### Quality presets
+### The two quality settings
 
-All three are correct everywhere. They differ only in how many periods of the note go
-into a grain on the middle and upper strings; the bottom of the range is dictated by
-physics and is identical on all of them, because a grain has to span at least one period
-of the note to stay aligned.
+Both are correct everywhere. They differ only in how many periods of the note go into a
+grain on the middle and upper strings. The bottom of the range is identical on both,
+because a grain has to span at least one period of the note to stay aligned and that is
+simply what a low E costs.
 
 Measured added latency at 48 kHz, shifting down two semitones:
 
-| String        | Tight   | Balanced | Smooth  |
-|---------------|---------|----------|---------|
-| E2 (low E)    | 12.1 ms | 12.1 ms  | 12.1 ms |
-| A2            |  9.1 ms |  9.1 ms  |  9.1 ms |
-| D3            |  6.9 ms |  6.9 ms  | 13.7 ms |
-| G3            |  5.1 ms | 10.0 ms  | 10.2 ms |
-| B3            |  4.1 ms |  8.1 ms  |  8.1 ms |
-| E4 (high e)   |  6.0 ms |  6.1 ms  |  9.2 ms |
+| String        | Low latency | Smooth  |
+|---------------|-------------|---------|
+| E2 (low E)    | 12.1 ms     | 12.1 ms |
+| A2            |  9.1 ms     |  9.1 ms |
+| D3            |  6.9 ms     | 13.7 ms |
+| G3            |  5.1 ms     | 10.2 ms |
+| B3            |  4.1 ms     |  8.1 ms |
+| E4 (high e)   |  6.0 ms     |  9.2 ms |
 
-Pitch accuracy is within about 2.7 cents on every preset and every string, so there is no
-measured accuracy reason to prefer one. Larger grains splice less often, which changes the
-character of the artifacts rather than the amount of them, and that difference is not
-something the test suite can score. Start on Tight if you want the least latency, and move
-up only if something sounds rough to you.
+Pitch accuracy is within about 2.7 cents on both, on every string, so there is no measured
+accuracy reason to prefer either. Longer grains splice less often, which changes the
+character of the artifacts rather than the amount of them, and that is not something the
+test suite can score.
+
+That is why the second setting is called Smooth and not "best sound". If it were
+measurably better it would not be a setting, it would just be what RSTune does. Start on
+Low latency and switch only if something sounds rough to you. The window shows the real
+added latency in milliseconds while you play, so you can see what the choice costs.
+
+Upgrading from a build with three settings: the old Tight and Balanced both map to Low
+latency and the old Smooth maps to Smooth, so nothing silently moves to a preset you did
+not tune on.
 
 ### Bass
 

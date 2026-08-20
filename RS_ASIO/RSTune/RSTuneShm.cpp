@@ -14,7 +14,7 @@ RSTuneShm::RSTuneShm()
 	m_cached.enabled = 0;
 	m_cached.semitones = 0;
 	m_cached.cents = 0.0f;
-	m_cached.quality = RSTuneQuality_Balanced;
+	m_cached.quality = RSTuneQuality_LowLatency;
 	for (int i = 0; i < RSTUNE_MAX_STREAMS; ++i)
 		m_cached.streamEnabled[i] = 1;
 
