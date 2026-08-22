@@ -36,10 +36,12 @@ processorArchitecture='*' publicKeyToken='6595b64144ccf1df' language='*'\"")
 enum
 {
 	IDC_CURRENT = 1001,
-	IDC_TARGET,
+	IDC_SHIFTSLIDER,
 	IDC_ENABLE,
 	IDC_QUALITY,
-	IDC_SHIFT,
+	IDC_SHIFTAMOUNT,
+	IDC_SHIFTRESULT,
+	IDC_SHIFTHINT,
 	IDC_PATH,
 	IDC_GAMESTATE,
 	IDC_LEVEL,
@@ -52,7 +54,7 @@ enum
 };
 
 static HINSTANCE g_inst;
-static HWND  g_main, g_curCombo, g_tgtCombo, g_enable, g_quality;
+static HWND  g_main, g_curCombo, g_slider, g_enable, g_quality;
 static HWND  g_stream[MAX_SHOWN_STREAMS];
 static HFONT g_font, g_fontBold;
 static wchar_t g_iniPath[MAX_PATH];
@@ -62,7 +64,7 @@ static HANDLE g_shmHandle = nullptr;
 
 static bool g_loading = false;
 static int  g_curIndex = 0;
-static int  g_tgtIndex = 0;
+static int  g_semitones = 0;   // slider value, the shift applied to the audio
 static int  g_lastHeartbeat = -1;
 static int  g_staleTicks = 0;
 
@@ -181,22 +183,14 @@ static void SaveDisabledIds()
 // ---------------------------------------------------------------------------
 // control state
 // ---------------------------------------------------------------------------
-static bool CurrentShift(int* outSemitones)
-{
-	return RSTuningDelta(g_curIndex, g_tgtIndex, outSemitones);
-}
-
 static void PushControl()
 {
 	if (!g_shm)
 		return;
 
-	int semis = 0;
-	const bool uniform = CurrentShift(&semis);
-
 	RSTuneControl c{};
-	c.enabled = (Button_GetCheck(g_enable) == BST_CHECKED && uniform) ? 1 : 0;
-	c.semitones = uniform ? semis : 0;
+	c.enabled = (Button_GetCheck(g_enable) == BST_CHECKED) ? 1 : 0;
+	c.semitones = g_semitones;
 	c.cents = 0.0f;   // reserved for a later build; v1 shifts by whole semitones only
 
 	c.quality = (int)SendMessageW(g_quality, CB_GETCURSEL, 0, 0);
@@ -223,71 +217,37 @@ static void PushControl()
 static void SaveSettings()
 {
 	IniSet(L"CurrentTuning", g_curIndex);
-	IniSet(L"TargetTuning", g_tgtIndex);
+	IniSet(L"Semitones", g_semitones);
 	IniSet(L"Enabled", Button_GetCheck(g_enable) == BST_CHECKED ? 1 : 0);
 	IniSet(L"Quality2", (int)SendMessageW(g_quality, CB_GETCURSEL, 0, 0));
 	SaveDisabledIds();
 }
 
-// Rebuilds the target list so it only offers tunings reachable by a uniform shift.
-static void RefreshTargets()
-{
-	const int previous = g_tgtIndex;
-
-	SendMessageW(g_tgtCombo, CB_RESETCONTENT, 0, 0);
-
-	int selectIdx = -1, n = 0;
-	for (int i = 0; i < kNumRSTunings; ++i)
-	{
-		int semis;
-		if (!RSTuningDelta(g_curIndex, i, &semis))
-			continue;
-
-		wchar_t label[128];
-		if (semis == 0)
-			swprintf_s(label, L"%s  (no shift)", kRSTunings[i].name);
-		else
-			swprintf_s(label, L"%s  (%+d)", kRSTunings[i].name, semis);
-
-		SendMessageW(g_tgtCombo, CB_ADDSTRING, 0, (LPARAM)label);
-		SendMessageW(g_tgtCombo, CB_SETITEMDATA, n, (LPARAM)i);
-		if (i == previous)
-			selectIdx = n;
-		++n;
-	}
-
-	if (selectIdx < 0)
-	{
-		for (int k = 0; k < n; ++k)
-		{
-			if ((int)SendMessageW(g_tgtCombo, CB_GETITEMDATA, k, 0) == g_curIndex)
-			{
-				selectIdx = k;
-				break;
-			}
-		}
-	}
-	if (selectIdx < 0) selectIdx = 0;
-
-	SendMessageW(g_tgtCombo, CB_SETCURSEL, selectIdx, 0);
-	g_tgtIndex = (int)SendMessageW(g_tgtCombo, CB_GETITEMDATA, selectIdx, 0);
-}
-
+// Says what the shift lands on. A named tuning is worth looking up rather than always
+// computing note names, because the table carries the spelling guitarists actually write.
 static void UpdateShiftLabel()
 {
-	int semis = 0;
-	wchar_t text[256];
-
-	if (!CurrentShift(&semis))
-		swprintf_s(text, L"Not a uniform shift");
-	else if (semis == 0)
-		swprintf_s(text, L"No shift  -  passing your guitar through untouched");
+	wchar_t amount[96];
+	if (g_semitones == 0)
+		swprintf_s(amount, L"No shift");
 	else
-		swprintf_s(text, L"%+d semitone%s   (%s  \x2192  %s)",
-		           semis, (semis == 1 || semis == -1) ? L"" : L"s",
-		           kRSTunings[g_curIndex].notes, kRSTunings[g_tgtIndex].notes);
+		swprintf_s(amount, L"%+d semitone%s", g_semitones,
+		           (g_semitones == 1 || g_semitones == -1) ? L"" : L"s");
+	SetDlgItemTextW(g_main, IDC_SHIFTAMOUNT, amount);
 
-	SetDlgItemTextW(g_main, IDC_SHIFT, text);
+	wchar_t result[220];
+	const int named = RSTuningFindShifted(g_curIndex, g_semitones);
+	if (named >= 0)
+	{
+		swprintf_s(result, L"%s   (%s)", kRSTunings[named].name, kRSTunings[named].notes);
+	}
+	else
+	{
+		wchar_t notes[128];
+		RSTuningNoteNames(g_curIndex, g_semitones, notes, 128);
+		swprintf_s(result, L"%s", notes);
+	}
+	SetDlgItemTextW(g_main, IDC_SHIFTRESULT, result);
 }
 
 // ---------------------------------------------------------------------------
@@ -476,18 +436,27 @@ static void CreateControls(HWND hwnd)
 		cx, y, cw, 300, hwnd, (HMENU)IDC_CURRENT, g_inst, nullptr);
 	SendMessageW(g_curCombo, WM_SETFONT, (WPARAM)g_font, TRUE);
 
-	y += 32;
-	MakeLabel(hwnd, L"Play songs written in", lx, y + 3, 140, 18);
-	g_tgtCombo = CreateWindowExW(0, L"COMBOBOX", nullptr,
-		WS_CHILD | WS_VISIBLE | WS_TABSTOP | CBS_DROPDOWNLIST | WS_VSCROLL,
-		cx, y, cw, 300, hwnd, (HMENU)IDC_TARGET, g_inst, nullptr);
-	SendMessageW(g_tgtCombo, WM_SETFONT, (WPARAM)g_font, TRUE);
-
-	y += 38;
-	MakeLabel(hwnd, L"", lx, y, 432, 22, IDC_SHIFT, g_fontBold);
+	y += 34;
+	MakeLabel(hwnd, L"Shift", lx, y + 4, 140, 18);
+	g_slider = CreateWindowExW(0, TRACKBAR_CLASSW, nullptr,
+		WS_CHILD | WS_VISIBLE | WS_TABSTOP | TBS_HORZ | TBS_AUTOTICKS | TBS_TOOLTIPS,
+		cx, y, 226, 30, hwnd, (HMENU)IDC_SHIFTSLIDER, g_inst, nullptr);
+	SendMessageW(g_slider, TBM_SETRANGE, TRUE, MAKELPARAM(0, 14));   // 0..14 maps to -7..+7
+	SendMessageW(g_slider, TBM_SETTICFREQ, 1, 0);
+	SendMessageW(g_slider, TBM_SETPAGESIZE, 0, 1);
+	MakeLabel(hwnd, L"", cx + 232, y + 4, 130, 18, IDC_SHIFTAMOUNT, g_fontBold);
 
 	y += 30;
-	g_enable = CreateWindowExW(0, L"BUTTON", L"Shift my guitar to the target tuning",
+	MakeLabel(hwnd, L"-7", cx + 2, y, 24, 16, -1, g_font);
+	MakeLabel(hwnd, L"0", cx + 108, y, 24, 16, -1, g_font);
+	MakeLabel(hwnd, L"+7", cx + 202, y, 24, 16, -1, g_font);
+
+	y += 24;
+	MakeLabel(hwnd, L"Sounds like", lx, y + 2, 140, 18);
+	MakeLabel(hwnd, L"", cx, y, 300, 22, IDC_SHIFTRESULT, g_fontBold);
+
+	y += 32;
+	g_enable = CreateWindowExW(0, L"BUTTON", L"Shift my guitar",
 		WS_CHILD | WS_VISIBLE | WS_TABSTOP | BS_AUTOCHECKBOX,
 		lx, y, 320, 22, hwnd, (HMENU)IDC_ENABLE, g_inst, nullptr);
 	SendMessageW(g_enable, WM_SETFONT, (WPARAM)g_font, TRUE);
@@ -531,8 +500,8 @@ static void CreateControls(HWND hwnd)
 	SendMessageW(launch, WM_SETFONT, (WPARAM)g_font, TRUE);
 
 	MakeLabel(hwnd,
-		L"Leave this open while you play. Rocksmith's own tuner will read the target "
-		L"tuning, so tune your guitar normally and let RSTune do the rest.",
+		L"Leave this open while you play. Tune your guitar to the tuning selected above, and "
+		L"Rocksmith's own tuner will read the shifted one.",
 		lx, y, 310, 44, IDC_HINT);
 }
 
@@ -561,11 +530,20 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
 
 		g_curIndex = IniGet(L"CurrentTuning", 0);
 		if (g_curIndex < 0 || g_curIndex >= kNumRSTunings) g_curIndex = 0;
-		g_tgtIndex = IniGet(L"TargetTuning", g_curIndex);
-		if (g_tgtIndex < 0 || g_tgtIndex >= kNumRSTunings) g_tgtIndex = g_curIndex;
+		// The shift used to be stored as a target tuning. Convert rather than discard,
+		// so an existing install keeps the shift it was set up with.
+		g_semitones = IniGet(L"Semitones", 999);
+		if (g_semitones == 999)
+		{
+			const int legacyTarget = IniGet(L"TargetTuning", g_curIndex);
+			int delta = 0;
+			g_semitones = RSTuningDelta(g_curIndex, legacyTarget, &delta) ? delta : 0;
+		}
+		if (g_semitones < -7) g_semitones = -7;
+		if (g_semitones > 7) g_semitones = 7;
 
 		SendMessageW(g_curCombo, CB_SETCURSEL, g_curIndex, 0);
-		RefreshTargets();
+		SendMessageW(g_slider, TBM_SETPOS, TRUE, (LPARAM)(g_semitones + 7));
 
 		// The setting used to have three values. Migrate rather than reinterpret, or an
 		// existing install would silently land on a different preset than it was tuned on.
@@ -614,15 +592,6 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
 		if (id == IDC_CURRENT && code == CBN_SELCHANGE)
 		{
 			g_curIndex = (int)SendMessageW(g_curCombo, CB_GETCURSEL, 0, 0);
-			RefreshTargets();
-			UpdateShiftLabel();
-			PushControl();
-			SaveSettings();
-		}
-		else if (id == IDC_TARGET && code == CBN_SELCHANGE)
-		{
-			const int sel = (int)SendMessageW(g_tgtCombo, CB_GETCURSEL, 0, 0);
-			g_tgtIndex = (int)SendMessageW(g_tgtCombo, CB_GETITEMDATA, sel, 0);
 			UpdateShiftLabel();
 			PushControl();
 			SaveSettings();
@@ -638,6 +607,21 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
 		}
 		return 0;
 	}
+
+	case WM_HSCROLL:
+		if ((HWND)lp == g_slider && !g_loading)
+		{
+			const int pos = (int)SendMessageW(g_slider, TBM_GETPOS, 0, 0);
+			const int semis = pos - 7;
+			if (semis != g_semitones)
+			{
+				g_semitones = semis;
+				UpdateShiftLabel();
+				PushControl();
+				SaveSettings();
+			}
+		}
+		return 0;
 
 	case WM_TIMER:
 		UpdateStatus();
@@ -682,7 +666,7 @@ int WINAPI wWinMain(HINSTANCE inst, HINSTANCE, LPWSTR, int show)
 		return 0;
 	}
 
-	INITCOMMONCONTROLSEX icc = { sizeof(icc), ICC_STANDARD_CLASSES };
+	INITCOMMONCONTROLSEX icc = { sizeof(icc), ICC_STANDARD_CLASSES | ICC_BAR_CLASSES };
 	InitCommonControlsEx(&icc);
 
 	if (!ShmOpen())
@@ -707,7 +691,7 @@ int WINAPI wWinMain(HINSTANCE inst, HINSTANCE, LPWSTR, int show)
 	wc.hIcon = LoadIcon(nullptr, IDI_APPLICATION);
 	RegisterClassExW(&wc);
 
-	RECT rc = { 0, 0, 464, 520 };
+	RECT rc = { 0, 0, 464, 500 };
 	AdjustWindowRect(&rc, WS_OVERLAPPED | WS_CAPTION | WS_SYSMENU | WS_MINIMIZEBOX, FALSE);
 
 	HWND hwnd = CreateWindowExW(0, L"RSTuneMain", L"RSTune " RSTUNE_VERSION_STR,

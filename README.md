@@ -18,9 +18,11 @@ do not install both.
 ## How to use it
 
 1. Start `RSTune.exe` from the Rocksmith folder.
-2. Set "My guitar is tuned to" and "Play songs written in".
-3. Tick "Shift my guitar to the target tuning".
-4. Launch the game (there is a button for it) and leave RSTune open while you play.
+2. Set "My guitar is tuned to".
+3. Drag the "Shift" slider, -7 to +7 semitones. The tuning you will sound like is shown
+   underneath it in bold.
+4. Tick "Shift my guitar".
+5. Launch the game (there is a button for it) and leave RSTune open while you play.
 
 Settings are remembered in `RSTune.ini` next to the exe.
 

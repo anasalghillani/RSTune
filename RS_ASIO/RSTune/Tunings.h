@@ -62,3 +62,63 @@ inline bool RSTuningDelta(int fromIndex, int toIndex, int* outSemitones)
 		*outSemitones = delta;
 	return true;
 }
+
+// ---------------------------------------------------------------------------
+// Working out what a shift lands on
+//
+// With a semitone slider the shift is whatever the user picked, and it is uniform by
+// definition, so nothing needs filtering. The current tuning is only used to tell them
+// what they will end up sounding like.
+// ---------------------------------------------------------------------------
+
+// MIDI note numbers of E standard, low string first: E2 A2 D3 G3 B3 E4
+static const int kRSBaseNotes[6] = { 40, 45, 50, 55, 59, 64 };
+
+static const wchar_t* kRSNoteNames[12] =
+{
+	L"C", L"C#", L"D", L"D#", L"E", L"F", L"F#", L"G", L"G#", L"A", L"A#", L"B"
+};
+
+// If the shifted tuning is one we have a name for, returns its index, otherwise -1.
+// Named tunings carry the spelling guitarists actually write (Eb rather than D#), which
+// is why it is worth looking them up instead of always computing note names.
+inline int RSTuningFindShifted(int fromIndex, int shift)
+{
+	if (fromIndex < 0 || fromIndex >= kNumRSTunings)
+		return -1;
+
+	for (int i = 0; i < kNumRSTunings; ++i)
+	{
+		bool match = true;
+		for (int s = 0; s < 6 && match; ++s)
+		{
+			if (kRSTunings[i].offsets[s] != kRSTunings[fromIndex].offsets[s] + shift)
+				match = false;
+		}
+		if (match)
+			return i;
+	}
+	return -1;
+}
+
+// Fallback spelling for shifts that do not land on a named tuning, e.g. "F A# D# G# C F".
+inline void RSTuningNoteNames(int fromIndex, int shift, wchar_t* out, int cap)
+{
+	if (!out || cap <= 0) return;
+	out[0] = 0;
+	if (fromIndex < 0 || fromIndex >= kNumRSTunings) return;
+
+	int len = 0;
+	for (int s = 0; s < 6; ++s)
+	{
+		int n = kRSBaseNotes[s] + kRSTunings[fromIndex].offsets[s] + shift;
+		while (n < 0) n += 12;
+		const wchar_t* name = kRSNoteNames[n % 12];
+
+		for (int k = 0; name[k] && len < cap - 2; ++k)
+			out[len++] = name[k];
+		if (s < 5 && len < cap - 2)
+			out[len++] = L' ';
+	}
+	out[len] = 0;
+}

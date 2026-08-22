@@ -47,9 +47,11 @@ It never touches audio output, so whatever you play back through is up to you.
 ## Using it
 
 1. Start `RSTune.exe`.
-2. Set **My guitar is tuned to** and **Play songs written in**.
-3. Tick **Shift my guitar to the target tuning**.
-4. Start the game. There is a button for it.
+2. Set **My guitar is tuned to**.
+3. Drag the **Shift** slider, -7 to +7 semitones. The tuning you will sound like is shown
+   underneath it in bold.
+4. Tick **Shift my guitar**.
+5. Start the game. There is a button for it.
 
 Leave the window open while you play. It shows which inputs it is reaching, the live added
 latency, and your input level.
