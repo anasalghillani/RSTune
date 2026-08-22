@@ -285,6 +285,20 @@ static void UpdatePathLabel(bool live, const RSTuneGameConfig& cfg, int activeSt
 	SetDlgItemTextW(g_main, IDC_PATH, buf);
 }
 
+// RS_ASIO numbers its inputs from zero, matching its own ini sections, but the hardware
+// they correspond to is labelled from one on the box. Show the number the user can read
+// off the front of their interface; the id used for persistence is untouched.
+static void FriendlyStreamLabel(const RSTuneStreamInfo& s, wchar_t* out, int cap)
+{
+	int asioIndex = -1;
+	if (swscanf_s(s.label, L"{ASIO IN %d}", &asioIndex) == 1 && asioIndex >= 0)
+		swprintf_s(out, cap, L"Input %d", asioIndex + 1);
+	else if (s.label[0])
+		swprintf_s(out, cap, L"%s", s.label);
+	else
+		swprintf_s(out, cap, L"(unnamed input)");
+}
+
 static void UpdateStreamList(bool live, const RSTuneTelemetry& t)
 {
 	int shown = 0;
@@ -296,9 +310,12 @@ static void UpdateStreamList(bool live, const RSTuneTelemetry& t)
 
 		const RSTuneStreamInfo& s = t.streams[i];
 
+		wchar_t friendly[160];
+		FriendlyStreamLabel(s, friendly, 160);
+
 		wchar_t label[220];
 		swprintf_s(label, L"%s   [%s, %.0f Hz, %d ch]%s",
-		           s.label[0] ? s.label : L"(unnamed input)",
+		           friendly,
 		           s.path == RSTunePath_Asio ? L"ASIO" : L"WASAPI",
 		           s.sampleRate, s.channels,
 		           s.looksLikeMic ? L"   - looks like a microphone" : L"");
@@ -324,11 +341,11 @@ static void UpdateStreamList(bool live, const RSTuneTelemetry& t)
 
 	wchar_t hdr[200];
 	if (!shown)
-		swprintf_s(hdr, L"Inputs   -   none seen yet, start the game");
+		swprintf_s(hdr, L"Input   -   none seen yet, start the game");
 	else if (active > MAX_SHOWN_STREAMS)
-		swprintf_s(hdr, L"Inputs RSTune is processing   (%d of %d shown; the rest stay enabled)", shown, active);
+		swprintf_s(hdr, L"Input RSTune is processing   (%d of %d shown; the rest stay enabled)", shown, active);
 	else
-		swprintf_s(hdr, L"Inputs RSTune is processing   (untick anything that is not your guitar)");
+		swprintf_s(hdr, L"Input RSTune is processing   (untick anything that is not your guitar)");
 	SetDlgItemTextW(g_main, IDC_INPUTSHDR, hdr);
 }
 
@@ -437,19 +454,19 @@ static void CreateControls(HWND hwnd)
 	SendMessageW(g_curCombo, WM_SETFONT, (WPARAM)g_font, TRUE);
 
 	y += 34;
-	MakeLabel(hwnd, L"Shift", lx, y + 4, 140, 18);
+	MakeLabel(hwnd, L"Shift", lx, y + 4, 44, 18);
+	MakeLabel(hwnd, L"", lx + 50, y + 4, 106, 18, IDC_SHIFTAMOUNT, g_fontBold);
 	g_slider = CreateWindowExW(0, TRACKBAR_CLASSW, nullptr,
 		WS_CHILD | WS_VISIBLE | WS_TABSTOP | TBS_HORZ | TBS_AUTOTICKS | TBS_TOOLTIPS,
-		cx, y, 226, 30, hwnd, (HMENU)IDC_SHIFTSLIDER, g_inst, nullptr);
+		cx, y, 284, 30, hwnd, (HMENU)IDC_SHIFTSLIDER, g_inst, nullptr);
 	SendMessageW(g_slider, TBM_SETRANGE, TRUE, MAKELPARAM(0, 14));   // 0..14 maps to -7..+7
 	SendMessageW(g_slider, TBM_SETTICFREQ, 1, 0);
 	SendMessageW(g_slider, TBM_SETPAGESIZE, 0, 1);
-	MakeLabel(hwnd, L"", cx + 232, y + 4, 130, 18, IDC_SHIFTAMOUNT, g_fontBold);
 
 	y += 30;
-	MakeLabel(hwnd, L"-7", cx + 2, y, 24, 16, -1, g_font);
-	MakeLabel(hwnd, L"0", cx + 108, y, 24, 16, -1, g_font);
-	MakeLabel(hwnd, L"+7", cx + 202, y, 24, 16, -1, g_font);
+	MakeLabel(hwnd, L"-7", cx + 4, y, 24, 16, -1, g_font);
+	MakeLabel(hwnd, L"0", cx + 138, y, 24, 16, -1, g_font);
+	MakeLabel(hwnd, L"+7", cx + 258, y, 24, 16, -1, g_font);
 
 	y += 24;
 	MakeLabel(hwnd, L"Sounds like", lx, y + 2, 140, 18);
