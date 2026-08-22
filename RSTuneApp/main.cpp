@@ -454,8 +454,8 @@ static void CreateControls(HWND hwnd)
 	SendMessageW(g_curCombo, WM_SETFONT, (WPARAM)g_font, TRUE);
 
 	y += 34;
-	MakeLabel(hwnd, L"Shift", lx, y + 4, 44, 18);
-	MakeLabel(hwnd, L"", lx + 50, y + 4, 106, 18, IDC_SHIFTAMOUNT, g_fontBold);
+	MakeLabel(hwnd, L"Shift", lx, y + 4, 34, 18);
+	MakeLabel(hwnd, L"", lx + 34, y + 4, 122, 18, IDC_SHIFTAMOUNT, g_fontBold);
 	g_slider = CreateWindowExW(0, TRACKBAR_CLASSW, nullptr,
 		WS_CHILD | WS_VISIBLE | WS_TABSTOP | TBS_HORZ | TBS_AUTOTICKS | TBS_TOOLTIPS,
 		cx, y, 284, 30, hwnd, (HMENU)IDC_SHIFTSLIDER, g_inst, nullptr);
