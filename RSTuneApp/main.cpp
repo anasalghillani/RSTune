@@ -454,10 +454,10 @@ static void CreateControls(HWND hwnd)
 	SendMessageW(g_curCombo, WM_SETFONT, (WPARAM)g_font, TRUE);
 
 	y += 34;
-	// "Shift" renders 31 px wide, so the readout starts at lx+39 to leave a single
-	// space of clear air after it rather than butting up against the t.
-	MakeLabel(hwnd, L"Shift", lx, y + 4, 39, 18);
-	MakeLabel(hwnd, L"", lx + 39, y + 4, 117, 18, IDC_SHIFTAMOUNT, g_fontBold);
+	// "Shift" renders 31 px wide, so its text ends at lx+31. The readout sits at lx+32,
+	// which is as far left as it goes before the two would overlap glyphs.
+	MakeLabel(hwnd, L"Shift", lx, y + 4, 32, 18);
+	MakeLabel(hwnd, L"", lx + 32, y + 4, 124, 18, IDC_SHIFTAMOUNT, g_fontBold);
 	g_slider = CreateWindowExW(0, TRACKBAR_CLASSW, nullptr,
 		WS_CHILD | WS_VISIBLE | WS_TABSTOP | TBS_HORZ | TBS_AUTOTICKS | TBS_TOOLTIPS,
 		cx, y, 284, 30, hwnd, (HMENU)IDC_SHIFTSLIDER, g_inst, nullptr);
